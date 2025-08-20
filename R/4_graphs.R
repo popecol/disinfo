@@ -16,11 +16,10 @@ m <- glmmTMB(D/N ~ cue * env * host_spec + (1|line), weights = N, data, family =
 car::Anova(m)
 
 
-# Figure 1 ----------------------------------------------------------------
+# Figure S# ----------------------------------------------------------------
 
 # Main effects of kairomones (a), current environment (b) and host specialisation (c) on dispersal rates. 
 
-# Main effects
 all_terms <- attr(terms(formula(m)), "term.labels")
 v <- all_terms[!grepl("[:|]", all_terms)]
 lab <- data.frame(v = v, lab = c("Kairomone", "Current environment", "Host specialisation"))
@@ -50,16 +49,16 @@ for (i in seq(length(v))) {
   segments(x, lci, x, uci, lwd = 1)
   points(x, y, cex = 3, col = "white", pch = 20)
   points(x, y, cex = 1.3)
-  mtext(paste0("(", letters[i], ")"), side = 2, line = 2.5, padj = -5.5, cex = 1.5, las = 1)
+  mtext(paste0("(", letters[i], ")"), side = 2, line = 2.5, padj = -5.4, cex = 1.5, las = 1)
 }
 par(op)
 
 
-# Figure 2 ----------------------------------------------------------------
+# Figures 1-3 ----------------------------------------------------------------
 
-# 2-way interactions ----
-
-plot_2_way <- function(model, formula) {
+plot_2_way <- function(model, formula, initial_letter = 1) {
+  # A helper function for plotting 2-way interactions.
+  
   f <- formula(formula)
   cf <- emmeans(model, f, type = "response", level = 0.95)
   cf50 <- emmeans(model, f, type = "response", level = 0.5)
@@ -88,7 +87,7 @@ plot_2_way <- function(model, formula) {
     segments(x, lci, x, uci, lwd = 1)
     points(x, y, cex = 3, col = "white", pch = 20)
     points(x, y, cex = 1.3)
-    mtext(paste0("(", letters[i], ")"), side = 2, line = 2.5, padj = -6.5, cex = 1.5, las = 1)
+    mtext(paste0("(", letters[(initial_letter - 1) + i], ")"), side = 2, line = 2.5, padj = -5.0, cex = 1.5, las = 1)
   }
   adj <- ifelse(length(by) == 2, 0.3, 0.5)
   mtext(lab[lab$v == xnam, 2], 1, -2, cex = 1.5, outer = TRUE, adj = adj)
@@ -100,7 +99,7 @@ plot_2_way(m, "~ host_spec | cue")
 plot_2_way(m, "~ env | host_spec")
 
 
-# Figure 5 ----------------------------------------------------------------
+# Figure 4 ----------------------------------------------------------------
 
 library(RColorBrewer)
 display.brewer.all(type = "qual")
@@ -108,8 +107,14 @@ pal <- brewer.pal(4, "Set1")
 col <- adjustcolor(pal, alpha = 0.5)
 colt <- adjustcolor(pal, alpha = 0.1)
 
+load("data/data.RData")
+data <- subset(data, n_kairo > 0)  # Zero is equivalent to control in the variable ‘cue’.
+data <- subset(data, plant == "W") # No mixes for env==‘unknown’.
+data <- transform(data, plant = NULL, env = NULL, group = interaction(cue, host_spec, sep = "_"))
+data <- droplevels(data)
 
-hist(data$N); summary(data$N)
+m <- glmmTMB(D/N ~ 0 + group + group:n_kairo + (1|line), weights = N, data, family = betabinomial)
+summary(m)
 
 group <- levels(data$group)
 label <- sub("_", " ", group)
