@@ -16,58 +16,225 @@ m <- glmmTMB(D/N ~ cue * env * host_spec + (1|line), weights = N, data, family =
 car::Anova(m)
 
 
-# Figure S# ----------------------------------------------------------------
+# Figure S3 ----------------------------------------------------------------
 
 # Main effects of kairomones (a), current environment (b) and host specialisation (c) on dispersal rates. 
 
-all_terms <- attr(terms(formula(m)), "term.labels")
-v <- all_terms[!grepl("[:|]", all_terms)]
-lab <- data.frame(v = v, lab = c("Kairomone", "Current environment", "Host specialisation"))
 
-# Marginal effects ----
-op <- par(mfrow = c(1, 3), mar = c(11, 5, 2, 2))
-
-for (i in seq(length(v))) {
-  cf <- emmeans(m, v[i], type = "response", level = 0.95)
-  cf50 <- emmeans(m, v[i], type = "response", level = 0.5)
-  dat <- print(cf)
-  dat50 <- print(cf50)
+plot_1_way <- function(model, formula, col_vec = "black", 
+                       show_sig = TRUE, 
+                       top_buffer = NULL,
+                       ylab_dist = 4, 
+                       xlab_dist = 8.0, 
+                       title_cex = 1.3, 
+                       axis_cex = 1.4,  
+                       pt_cex = 1.5,    
+                       pt_lwd = 2.5,    
+                       star_dist = 0.1,
+                       bracket_gap = 0.1, 
+                       ylim = NULL, 
+                       verbose = TRUE) {
   
-  k <- nrow(dat)
-  x <- seq(k)
-  xlim <- extendrange(x, f = ifelse(k == 3, 0.3, 0.7))
-  y <- dat[, 2]
-  lci <- dat[, 5]; uci <- dat[, 6]
-  # ylim <- range(lci, uci)
-  # ylim <- extendrange(ylim, f = 0.1)
-  ylim <- c(0.03, 0.15)
-  lci50 <- dat50[, 5]; uci50 <- dat50[, 6]
-  plot(x, y, xlim = xlim, ylim = ylim, xaxt = "n", xlab = "", ylab = "Dispersal rate", type = "n", cex.lab = 2)
-  axis(1, at = x, labels = dat[, 1], cex.axis = 1.5, las = 2)
-  mtext(lab$lab[i], 1, 8, cex = 1.3)
-  segments(x, lci50, x, uci50, lwd = 3)
-  segments(x, lci, x, uci, lwd = 1)
-  points(x, y, cex = 3, col = "white", pch = 20)
-  points(x, y, cex = 1.3)
-  mtext(paste0("(", letters[i], ")"), side = 2, line = 2.5, padj = -5.4, cex = 1.5, las = 1)
+  # Plots main effects (1-way) from a model with EMMeans and significance brackets.
+  #
+  # Arguments:
+  #           model: A model object supported by the 'emmeans' package.
+  #         formula: A formula specifying the main effect (e.g. '~ x_axis').
+  #         col_vec: Color (or vector of colors) for the points.
+  #        show_sig: Logical. Show pairwise significance brackets on top.
+  #      top_buffer: Numeric. Manual fraction of y-range to reserve at top for brackets.
+  #       ylab_dist: Numeric. Margin line distance for Y-axis title.
+  #       xlab_dist: Numeric. Margin line distance for X-axis title.
+  #       title_cex: Numeric. Text size multiplier for axis titles.
+  #        axis_cex: Numeric. Text size multiplier for axis tick labels.
+  #          pt_cex: Numeric. Size of the data points.
+  #          pt_lwd: Numeric. Line width of the data point borders.
+  #       star_dist: Numeric. Offset distance for significance stars above brackets.
+  #     bracket_gap: Numeric. Vertical space (fraction of y-range) between data and first bracket.
+  #         verbose: Logical. Print summary of significant contrasts to console.
+  
+  # --- 1. Calculate Estimated Marginal Means (95% only) ---
+  f <- formula(formula)
+  cf <- emmeans(model, f, type = "response", level = 0.95)
+  dat <- data.frame(cf)
+  
+  # Robust Column Identification
+  y_col_idx <- grep("prob|rate|response|emmean", names(dat), ignore.case = TRUE)[1]
+  lci_col_idx <- grep("lower|LCL|2.5", names(dat), ignore.case = TRUE)[1]
+  uci_col_idx <- grep("upper|UCL|97.5", names(dat), ignore.case = TRUE)[1]
+  
+  if (is.na(lci_col_idx) || is.na(uci_col_idx)) {
+    stop("Could not automatically identify Confidence Interval columns.")
+  }
+  
+  x_var_name <- names(dat)[1]
+  x_dat <- dat[, 1]
+  levels_x <- levels(x_dat)
+  
+  # --- 2. Calculate Contrasts ---
+  sig_data <- NULL
+  if (show_sig) {
+    prs <- contrast(cf, method = "pairwise", adjust = "tukey")
+    s_df <- as.data.frame(prs)
+    sig_data <- s_df[s_df$p.value < 0.05, ]
+  }
+  
+  if (verbose) {
+    cat(sprintf("[%s] Significant contrasts: %d\n", 
+                paste(format(formula), collapse=""),
+                if(is.null(sig_data)) 0 else nrow(sig_data)))
+  }
+  
+  # --- 3. Setup Plot Params ---
+  if (length(col_vec) == 1) {
+    cols <- rep(col_vec, length(levels_x))
+  } else {
+    cols <- rep(col_vec, length.out = length(levels_x))
+  }
+  
+  # --- 4. Handle Canvas Expansion ---
+  
+  # Determine logical limits (What the axis shows)
+  if (!is.null(ylim)) {
+    logical_ylim <- ylim
+    data_max <- ylim[2] # Use the manual max for bracket calculations
+  } else {
+    data_max <- max(dat[, uci_col_idx])
+    logical_ylim <- c(0, data_max)
+  }
+  
+  visual_range <- diff(logical_ylim)
+  
+  # Top Padding Calculation
+  if (!is.null(top_buffer)) {
+    pad_top <- top_buffer * visual_range
+  } else {
+    base_buff <- 0.1
+    if (show_sig && !is.null(sig_data) && nrow(sig_data) > 0) {
+      base_buff <- base_buff + 0.3
+    }
+    pad_top <- base_buff * visual_range
+  }
+  
+  pad_bot <- 0.05 * visual_range
+  canvas_ylim <- c(logical_ylim[1] - pad_bot, logical_ylim[2] + pad_top)
+  
+  x_lab <- if(exists("lab") && x_var_name %in% lab$v) lab[lab$v == x_var_name, 2] else x_var_name
+  
+  # --- 5. Draw Plot ---
+  plot(1, type = "n", 
+       xlim = c(0.5, length(levels_x) + 0.5), 
+       ylim = canvas_ylim, 
+       xaxt = "n", yaxt = "n", 
+       xlab = "", ylab = "")
+  
+  # Titles
+  mtext("Dispersal rate", side = 2, line = ylab_dist, cex = title_cex)
+  mtext(x_lab, side = 1, line = xlab_dist, cex = title_cex)
+  
+  # Axes
+  y_ticks <- pretty(logical_ylim)
+  # Ensure we don't draw ticks outside the requested ylim if manual
+  if(!is.null(ylim)) y_ticks <- y_ticks[y_ticks <= ylim[2]]
+  y_ticks <- y_ticks[y_ticks >= 0] 
+  
+  axis(2, at = y_ticks, las = 1, cex.axis = axis_cex)
+  axis(1, at = 1:length(levels_x), labels = levels_x, cex.axis = axis_cex, las = 2)
+  
+  # --- 6. Plot Points ---
+  for (i in seq_along(levels_x)) {
+    x_pos <- i
+    y <- dat[i, y_col_idx]
+    lci <- dat[i, lci_col_idx]
+    uci <- dat[i, uci_col_idx]
+    
+    segments(x_pos, lci, x_pos, uci, lwd = 2, col = cols[i])
+    points(x_pos, y, pch = 21, bg = "white", col = cols[i], cex = pt_cex, lwd = pt_lwd)
+  }
+  
+  # --- 7. Draw Significance Brackets ---
+  if (show_sig && !is.null(sig_data) && nrow(sig_data) > 0) {
+    step_h <- visual_range * 0.05 
+    base_y <- data_max + (visual_range * bracket_gap)
+    
+    for (r in 1:nrow(sig_data)) {
+      parts <- unlist(strsplit(as.character(sig_data$contrast[r]), "\\s+[-/]\\s+"))
+      if (length(parts) >= 2) {
+        idx1 <- which(levels_x == trimws(parts[1]))
+        idx2 <- which(levels_x == trimws(parts[2]))
+        
+        if (length(idx1) > 0 && length(idx2) > 0) {
+          x1 <- idx1; x2 <- idx2
+          
+          lines(c(x1, x1, x2, x2), 
+                c(base_y, base_y + step_h/3, base_y + step_h/3, base_y), 
+                lwd = 1.5)
+          
+          p_val <- sig_data$p.value[r]
+          sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
+          
+          text(mean(c(x1, x2)), base_y + step_h/2, labels = sym, cex = 1.2, pos = 3, offset = star_dist)
+          
+          base_y <- base_y + step_h * 1.5
+        }
+      }
+    }
+  }
 }
+
+
+mult <- 1.4
+
+# Dimensions in millimetres:
+w <- 173; h <- 80
+
+# Dimensions in inches * multiplier:
+wi <- round(mult * w / 25.4, 1)
+hi <- round(mult * h / 25.4, 1)
+
+cairo_pdf("Figures/Fig_S3.pdf", width = wi, height = hi, symbolfamily = "OpenSymbol")
+
+op <- par(mfrow = c(1, 3), mar = c(11, 6, 3, 2))
+
+# Panel A
+plot_1_way(m, '~ cue', ylim = c(0, 0.15))
+mtext("(a)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
+# Panel B
+plot_1_way(m, '~ env', top_buffer = 0.2, ylim = c(0, 0.15))
+mtext("(b)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
+# Panel C
+plot_1_way(m, '~ host_spec', top_buffer = 0.2, ylim = c(0, 0.15))
+mtext("(c)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
 par(op)
+
+dev.off()
+
+
 
 
 # Figure 1 ----------------------------------------------------------------
 
-plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"), 
+library(RColorBrewer)
+display.brewer.all(3, type = "qual")
+pal <- brewer.pal(3, "Dark2")
+
+plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B3"), 
                        show_sig_top = TRUE, show_sig_bottom = TRUE, 
                        add_legend = TRUE, legend_pos = "topright",
                        legend_buffer = 0.45, 
                        bottom_buffer = NULL,
-                       ylab_dist = 3.5, 
+                       ylab_dist = 3.7, 
                        xlab_dist = 3.0, 
-                       title_cex = 1.3, # Size of X and Y titles
-                       axis_cex = 1.2,  # Size of tick labels
-                       pt_cex = 1.5,    # Size of data points
-                       pt_lwd = 2.5,    # Thickness of point borders
-                       leg_cex = 1.3,   # Size of legend text
+                       title_cex = 1.3, 
+                       axis_cex = 1.4,  
+                       pt_cex = 1.5,    
+                       pt_lwd = 2.5,    
+                       leg_cex = 1.3,   
+                       star_dist_top = -0.1,
+                       star_dist_bot = 0.4,
                        verbose = TRUE) {
   
   # Plots 2-way interactions from a model with EMMeans and significance brackets.
@@ -89,6 +256,8 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
   #          pt_cex: Numeric. Size of the data points (pch).
   #          pt_lwd: Numeric. Line width of the data point borders.
   #         leg_cex: Numeric. Text size multiplier for the legend.
+  #   star_dist_top: Numeric. Offset distance for significance stars above top brackets.
+  #   star_dist_bot: Numeric. Offset distance for significance stars below bottom brackets.
   #         verbose: Logical. Print summary of significant contrasts to console.
   #
   # Returns:
@@ -97,9 +266,10 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
   # Details:
   #   The function calculates estimated marginal means (95% CI) and performs 
   #   pairwise contrasts. It expands the plotting canvas vertically to accommodate 
-  #   significance brackets. Top brackets compare grouping levels within an X-level; 
-  #   bottom brackets compare X-levels within a group. The Y-axis limits are strictly 
-  #   enforced at 0 for logical consistency, but brackets can be drawn below 0.
+  #   significance brackets without distorting the logical Y-axis scale (which remains 
+  #   anchored at 0). Top brackets compare grouping levels within an X-level; 
+  #   bottom brackets compare X-levels within a group. The visual y-limits are extended 
+  #   via padding buffers to prevent brackets from being clipped.
   
   # --- 1. Calculate Estimated Marginal Means (95% only) ---
   f <- formula(formula)
@@ -159,7 +329,6 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
   if (!is.null(bottom_buffer)) {
     pad_bot <- bottom_buffer * visual_range
   } else {
-    # Default: 0.1 base + 0.1 per group
     pad_bot <- if(show_sig_bottom) (0.1 + (0.1 * n_groups)) * visual_range else 0.05 * visual_range
   }
   
@@ -176,7 +345,7 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
        xlab = "", ylab = "", 
        las = 1)
   
-  # Titles (Same size)
+  # Titles
   mtext("Dispersal rate", side = 2, line = ylab_dist, cex = title_cex)
   mtext(x_lab, side = 1, line = xlab_dist, cex = title_cex)
   
@@ -193,10 +362,7 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
     y <- dat[idx, 3]
     lci <- dat[idx, 6]; uci <- dat[idx, 7]
     
-    # Draw 95% CI
     segments(x_pos, lci, x_pos, uci, lwd = 2, col = cols[i])
-    
-    # Draw Points
     points(x_pos, y, pch = pchs[i], bg = "white", col = cols[i], cex = pt_cex, lwd = pt_lwd)
   }
   
@@ -222,7 +388,10 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
               lines(c(x1, x1, x2, x2), c(base_y, base_y + step_h/3, base_y + step_h/3, base_y), lwd = 1.5)
               p_val <- curr_sigs$p.value[r]
               sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
-              text(mean(c(x1, x2)), base_y + step_h/2, labels = sym, cex = 1.2, pos = 3, offset = 0.1)
+              
+              # USED HERE: star_dist_top
+              text(mean(c(x1, x2)), base_y + step_h/2, labels = sym, cex = 1.2, pos = 3, offset = star_dist_top)
+              
               base_y <- base_y + step_h * 1.5
             }
           }
@@ -233,15 +402,12 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
   
   # --- 8. Draw BOTTOM Brackets ---
   if (show_sig_bottom && !is.null(sig_data_bot) && nrow(sig_data_bot) > 0) {
-    # Reverted to simple start at 0
     start_y <- 0 
-    
     for (gi in seq_along(levels_by)) {
       curr_group <- levels_by[gi]
       curr_sigs <- sig_data_bot[as.character(sig_data_bot[[by_var_name]]) == as.character(curr_group), ]
       
       if (nrow(curr_sigs) > 0) {
-        # Standard spacing logic
         lane_y <- start_y - (step_h * 0.5) - ((gi - 1) * (step_h * 1.8))
         
         for (r in 1:nrow(curr_sigs)) {
@@ -257,7 +423,9 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
               lines(c(x1, x1, x2, x2), c(y_top, y_bottom, y_bottom, y_top), lwd = 1.5, col = cols[gi])
               p_val <- curr_sigs$p.value[r]
               sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
-              text(mean(c(x1, x2)), y_bottom, labels = sym, cex = 1.2, col = cols[gi], pos = 1, offset = 0.5) 
+              
+              # USED HERE: star_dist_bot
+              text(mean(c(x1, x2)), y_bottom, labels = sym, cex = 1.2, col = cols[gi], pos = 1, offset = star_dist_bot) 
             }
           }
         }
@@ -272,21 +440,35 @@ plot_2_way <- function(model, formula, col_vec = c("black", "red", "blue"),
 }
 
 
+mult <- 1.4
+
+# Dimensions in millimetres:
+w <- 173; h <- 70
+
+# Dimensions in inches * multiplier:
+wi <- round(mult * w / 25.4, 1)
+hi <- round(mult * h / 25.4, 1)
+
+cairo_pdf("Figures/Fig_1.pdf", width = wi, height = hi, symbolfamily = "OpenSymbol")
+
 op <- par(mfrow = c(1, 3), mar = c(5.5, 6, 3, 2))
 
-# Panel A: Manual bottom buffer
+# Panel A
 plot_2_way(m, '~ env | cue', legend_buffer = 0.6, bottom_buffer = 0.3)
 mtext("(a)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 
-# Panel B: Manual bottom buffer
+# Panel B
 plot_2_way(m, '~ host_spec | cue', legend_buffer = 0.3, bottom_buffer = 0.25)
 mtext("(b)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 
-# Panel C: Manual bottom buffer
+# Panel C
 plot_2_way(m, '~ env | host_spec', legend_buffer = 0.1, bottom_buffer = 0.2)
 mtext("(c)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 
 par(op)
+
+dev.off()
+
 
 
 # Figure 4 ----------------------------------------------------------------
@@ -335,5 +517,3 @@ for (i in seq(length(group))) {
 legend(2, 0.25, legend = label, text.col = "white", bty = "n", col = colt, lwd = 15)
 legend(2, 0.25, legend = label, bty = "n", col = pal, lwd = 2)
 par(op)
-
-
