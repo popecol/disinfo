@@ -20,7 +20,6 @@ car::Anova(m)
 
 # Main effects of kairomones (a), current environment (b) and host specialisation (c) on dispersal rates. 
 
-
 plot_1_way <- function(model, formula, col_vec = "black", 
                        show_sig = TRUE, 
                        top_buffer = NULL,
@@ -214,12 +213,11 @@ dev.off()
 
 
 
-
 # Figure 1 ----------------------------------------------------------------
 
-library(RColorBrewer)
-display.brewer.all(3, type = "qual")
-pal <- brewer.pal(3, "Dark2")
+# library(RColorBrewer)
+# display.brewer.all(3, type = "qual")
+# pal <- brewer.pal(3, "Dark2")
 
 plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B3"), 
                        show_sig_top = TRUE, show_sig_bottom = TRUE, 
@@ -389,7 +387,6 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
               p_val <- curr_sigs$p.value[r]
               sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
               
-              # USED HERE: star_dist_top
               text(mean(c(x1, x2)), base_y + step_h/2, labels = sym, cex = 1.2, pos = 3, offset = star_dist_top)
               
               base_y <- base_y + step_h * 1.5
@@ -424,7 +421,6 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
               p_val <- curr_sigs$p.value[r]
               sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
               
-              # USED HERE: star_dist_bot
               text(mean(c(x1, x2)), y_bottom, labels = sym, cex = 1.2, col = cols[gi], pos = 1, offset = star_dist_bot) 
             }
           }
@@ -470,8 +466,7 @@ par(op)
 dev.off()
 
 
-
-# Figure 4 ----------------------------------------------------------------
+# Figure 2 ----------------------------------------------------------------
 
 library(RColorBrewer)
 display.brewer.all(type = "qual")
@@ -479,41 +474,147 @@ pal <- brewer.pal(4, "Set1")
 col <- adjustcolor(pal, alpha = 0.5)
 colt <- adjustcolor(pal, alpha = 0.1)
 
+
+# Data ----
+
 load("data/data.RData")
 data <- subset(data, n_kairo > 0)  # Zero is equivalent to control in the variable ‘cue’.
 data <- subset(data, plant == "W") # No mixes for env==‘unknown’.
-data <- transform(data, plant = NULL, env = NULL, group = interaction(cue, host_spec, sep = "_"))
+data <- transform(data, group = interaction(cue, host_spec, sep = "_"), q = D / N, SN = n_familiar / n_kairo, regime = NULL, plant = NULL, env = NULL)
 data <- droplevels(data)
+summary(data)
 
-m <- glmmTMB(D/N ~ 0 + group + group:n_kairo + (1|line), weights = N, data, family = betabinomial)
-summary(m)
 
-group <- levels(data$group)
-label <- sub("_", " ", group)
+# Models ----
 
-n_kairo <- seq(0.9, 3.1, length.out = 100)
-nd <- expand.grid(group = group, n_kairo = n_kairo, line = NA, N = 10)
+# No. of kairomones
+mnk <- glmmTMB(D/N ~ 0 + group + group:n_kairo + (1|line), weights = N, data, family = betabinomial)
 
-# Excluding unobserved range
-idx <- (nd$group == "Unfamiliar_Generalist") & (nd$n_kairo > 2.1)
-nd <- nd[!idx, ]
+# SN ratio
+msn <- glmmTMB(D/N ~ 0 + host_spec + host_spec:SN + (1|line), weights = N, data, family = betabinomial)
 
-pred <- predict(m, nd, se = TRUE)
-fit <- pred$fit; se <- pred$se.fit
-q <- -qt(0.025, df.residual(m))
-lw <- fit - q * se; up <- fit + q * se
-p <- plogis(cbind(fit, lw, up))
-nd <- cbind(nd, p)
 
-op <- par(mar = c(5, 5, 3, 2))
-plot(fit ~ n_kairo, nd, type = "n", xlim = extendrange(1:3), ylim = range(lw, up), xlab = "No. of kairomones", ylab = "Dispersal rate", cex.lab = 1.5, xaxt = "n")
+# 1. Prepare Data for the Graph ----
+
+# (a) Number of kairomones (Model mnk)
+group_levels <- levels(data$group)
+n_kairo_seq <- seq(0.9, 3.1, length.out = 100)
+
+# Create prediction grid for (a)
+nd_a <- expand.grid(group = group_levels, n_kairo = n_kairo_seq, line = NA, N = 10)
+
+# Exclude unobserved range for Unfamiliar Generalists
+idx_a <- (nd_a$group == "Unfamiliar_Generalist") & (nd_a$n_kairo > 2.1)
+nd_a <- nd_a[!idx_a, ]
+
+# Predictions and Confidence Intervals for (a)
+pred_a <- predict(mnk, nd_a, se = TRUE)
+fit_a <- pred_a$fit
+se_a <- pred_a$se.fit
+q_a <- -qt(0.025, df.residual(mnk))
+
+lw_a <- fit_a - q_a * se_a
+up_a <- fit_a + q_a * se_a
+
+# Transform to probability scale
+p_a <- plogis(cbind(fit = fit_a, lw = lw_a, up = up_a))
+nd_a <- cbind(nd_a, p_a)
+
+# (b) Signal-to-noise ratio (Model msn)
+host_spec_levels <- levels(data$host_spec)
+SN_seq <- seq(0, 1, length.out = 100)
+
+
+# Create prediction grid for (b)
+nd_b <- expand.grid(host_spec = host_spec_levels, SN = SN_seq, line = NA, N = 10)
+
+# Predictions and Confidence Intervals for (b)
+pred_b <- predict(msn, nd_b, se = TRUE)
+fit_b <- pred_b$fit
+se_b <- pred_b$se.fit
+q_b <- -qt(0.025, df.residual(msn))
+
+lw_b <- fit_b - q_b * se_b
+up_b <- fit_b + q_b * se_b
+
+# Transform to probability scale
+p_b <- plogis(cbind(fit = fit_b, lw = lw_b, up = up_b))
+nd_b <- cbind(nd_b, p_b)
+
+
+# 2. Plotting ----
+
+cex.lab <- 1.3
+ylim <- c(0, 0.25)
+
+mult <- 1.4
+
+# Dimensions in millimetres:
+w <- 110; h <- 70
+
+# Dimensions in inches * multiplier:
+wi <- round(mult * w / 25.4, 1)
+hi <- round(mult * h / 25.4, 1)
+
+cairo_pdf("Figures/Fig_2.pdf", width = wi, height = hi, symbolfamily = "OpenSymbol")
+
+
+op <- par(mfrow = c(1, 2), mar = c(4.5, 4.5, 2.5, 1))
+
+# Panel (a) ----
+plot(fit ~ n_kairo, nd_a, type = "n", 
+     xlim = extendrange(1:3), 
+     ylim = ylim, 
+     xlab = "No. of kairomones", 
+     ylab = "Dispersal rate", 
+     cex.lab = cex.lab,
+     cex.axis = 0.8,
+     xaxt = "n")
 axis(1, at = 1:3)
-for (i in seq(length(group))) {
-  g <- group[i]
-  dat <- subset(nd, group == g)
-  polygon(x = c(dat$n_kairo, rev(dat$n_kairo)), y = c(dat$lw, rev(dat$up)), border = NA, col = colt[i])
+
+for (i in seq_along(group_levels)) {
+  g <- group_levels[i]
+  dat <- subset(nd_a, group == g)
+  polygon(x = c(dat$n_kairo, rev(dat$n_kairo)), 
+          y = c(dat$lw, rev(dat$up)), 
+          border = NA, col = colt[i])
   lines(dat$n_kairo, dat$fit, col = col[i], lwd = 3)
 }
-legend(2, 0.25, legend = label, text.col = "white", bty = "n", col = colt, lwd = 15)
-legend(2, 0.25, legend = label, bty = "n", col = pal, lwd = 2)
+
+# Legend for (a)
+# Cleaning names for the legend (removing underscores)
+legend_labels <- gsub("_", " ", group_levels)
+legend("topright", legend = legend_labels, 
+       col = col[1:length(group_levels)], 
+       lwd = 3, bty = "n", cex = 0.7)
+
+mtext("(a)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
+
+# --- Panel (b) ---
+plot(fit ~ SN, nd_b, type = "n", 
+     ylim = ylim, 
+     xlab = "Signal-to-Noise Ratio", 
+     ylab = "", 
+     cex.axis = 0.8,
+     cex.lab = cex.lab)
+
+for (i in seq_along(host_spec_levels)) {
+  h <- host_spec_levels[i]
+  dat <- subset(nd_b, host_spec == h)
+  polygon(x = c(dat$SN, rev(dat$SN)), 
+          y = c(dat$lw, rev(dat$up)), 
+          border = NA, col = colt[i]) # Re-using colors 1 and 2
+  lines(dat$SN, dat$fit, col = col[i], lwd = 3)
+}
+
+# Legend for (b)
+legend("topleft", legend = host_spec_levels, 
+       col = col[1:length(host_spec_levels)], 
+       lwd = 3, bty = "n", cex = 0.7)
+
+mtext("(b)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
 par(op)
+
+dev.off()
