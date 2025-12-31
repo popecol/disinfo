@@ -34,9 +34,10 @@ em <- function(obj, formula, size = 18, ...) {
 load("data/data.RData")
 summary(data)
 
-#      line: Evolutionary lineage identifier.
+#     line: Evolutionary lineage identifier.
 #     plant: Host plant (W=wheat, B=barley, S=smooth brome).
-#     kairo: Kairomones delivered (control=no kairomones, W=wheat, B=barley, S=smooth brome, O=oats, and their combinations)
+#     kairo: Kairomones delivered (control=no kairomones, W=wheat, B=barley, 
+#            S=smooth brome, O=oats, and their combinations)
 # host_spec: Host specialisation (Generalist, Specialist).
 #         W: Was the wheat kairomone delivered? (0=no, 1=yes)
 #         B: Was the barley kairomone delivered? (0=no, 1=yes)
@@ -46,7 +47,8 @@ summary(data)
 #         N: The number of individuals at the beginning of the experiment.
 #         R: The number of individuals that remained on the plant (i.e. did not disperse).
 #         D: The number of dispersers (D=N-R).
-#       cue: Have any of the kairomones ever been encountered before? (Control=no kairomone, Familiar=yes, Unfamiliar=no)
+#       cue: Have any of the kairomones ever been encountered before? (Control=no kairomone,
+#            Familiar=yes, Unfamiliar=no)
 #       env: Have the current environment ever been encountered before? (Familiar=yes, Unfamiliar=no)
 #         q: Dispersal rate (q=D/N)
 
