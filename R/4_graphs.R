@@ -216,10 +216,11 @@ dev.off()
 # Figure 1 ----------------------------------------------------------------
 
 # library(RColorBrewer)
-# display.brewer.all(3, type = "qual")
-# pal <- brewer.pal(3, "Dark2")
+# display.brewer.all(8, type = "qual")
+# pal <- brewer.pal(8, "Dark2")
 
-plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B3"), 
+plot_2_way <- function(model, formula, 
+                       col_vec = c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666"), 
                        show_sig_top = TRUE, show_sig_bottom = TRUE, 
                        add_legend = TRUE, legend_pos = "topright",
                        legend_buffer = 0.45, 
@@ -233,6 +234,12 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
                        leg_cex = 1.3,   
                        star_dist_top = -0.1,
                        star_dist_bot = 0.4,
+                       offset_spread = 0.2, 
+                       ylim = NULL,
+                       x_tick_labs = NULL, 
+                       xlab_text = NULL,   
+                       leg_title = NULL,
+                       top_bracket_spacing = 1.5,
                        verbose = TRUE) {
   
   # Plots 2-way interactions from a model with EMMeans and significance brackets.
@@ -240,7 +247,7 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   # Arguments:
   #           model: A model object supported by the 'emmeans' package.
   #         formula: A formula specifying the interaction (e.g. '~ x_axis | grouping').
-  #         col_vec: Vector of colors for the grouping levels (default black/red/blue).
+  #         col_vec: Vector of colors for the grouping levels (default 'Dark2').
   #    show_sig_top: Logical. Show significance brackets between groups (top).
   # show_sig_bottom: Logical. Show significance brackets between x-levels (bottom).
   #      add_legend: Logical. Whether to draw the legend.
@@ -256,18 +263,13 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   #         leg_cex: Numeric. Text size multiplier for the legend.
   #   star_dist_top: Numeric. Offset distance for significance stars above top brackets.
   #   star_dist_bot: Numeric. Offset distance for significance stars below bottom brackets.
+  #   offset_spread: Numeric. Width of the spread of points around the x-tick.
+  #            ylim: Vector c(min, max). Manual limits for the Y-axis.
+  #     x_tick_labs: Character vector. Custom labels for X-axis ticks.
+  #       xlab_text: Character string. Custom title for the X-axis.
+  #       leg_title: Character string. Custom title for the Legend.
+  # top_bracket_spacing: Numeric. Multiplier for vertical gap between top brackets (default 1.5).
   #         verbose: Logical. Print summary of significant contrasts to console.
-  #
-  # Returns:
-  #   No return value; produces a plot on the current graphics device.
-  #
-  # Details:
-  #   The function calculates estimated marginal means (95% CI) and performs 
-  #   pairwise contrasts. It expands the plotting canvas vertically to accommodate 
-  #   significance brackets without distorting the logical Y-axis scale (which remains 
-  #   anchored at 0). Top brackets compare grouping levels within an X-level; 
-  #   bottom brackets compare X-levels within a group. The visual y-limits are extended 
-  #   via padding buffers to prevent brackets from being clipped.
   
   # --- 1. Calculate Estimated Marginal Means (95% only) ---
   f <- formula(formula)
@@ -303,14 +305,17 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   }
   
   # --- 3. Setup Plot Params ---
-  offsets <- seq(-0.15, 0.15, length.out = n_groups)
+  offsets <- seq(-offset_spread, offset_spread, length.out = n_groups)
   cols <- rep(col_vec, length.out = n_groups)
-  pch_vec <- c(21, 22, 24, 23, 25) 
-  pchs <- rep(pch_vec, length.out = n_groups)
+  full_pch_vec <- c(21, 22, 24, 23, 25, 21, 22, 24, 23, 25) 
+  pchs <- rep(full_pch_vec, length.out = n_groups)
   
   # --- 4. Handle Canvas Expansion ---
-  data_max <- max(dat[, 7])
-  logical_ylim <- c(0, data_max)
+  real_data_max <- max(dat[, 7])
+  user_max <- if(!is.null(ylim)) ylim[2] else real_data_max
+  calc_max <- max(real_data_max, user_max)
+  
+  logical_ylim <- c(0, calc_max)
   visual_range <- diff(logical_ylim)
   
   # Top Padding
@@ -327,13 +332,25 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   if (!is.null(bottom_buffer)) {
     pad_bot <- bottom_buffer * visual_range
   } else {
-    pad_bot <- if(show_sig_bottom) (0.1 + (0.1 * n_groups)) * visual_range else 0.05 * visual_range
+    n_bottom_sigs <- if(!is.null(sig_data_bot)) nrow(sig_data_bot) else 0
+    pad_bot <- (0.1 + (0.05 * n_bottom_sigs) + (0.05 * n_groups)) * visual_range
   }
   
-  canvas_ylim <- c(logical_ylim[1] - pad_bot, logical_ylim[2] + pad_top)
+  canvas_ylim <- c(0 - pad_bot, calc_max + pad_top)
   
-  x_lab <- if(exists("lab") && x_var_name %in% lab$v) lab[lab$v == x_var_name, 2] else x_var_name
-  by_lab <- if(exists("lab") && by_var_name %in% lab$v) lab[lab$v == by_var_name, 2] else by_var_name
+  # Logic for X-Axis TITLE
+  if (!is.null(xlab_text)) {
+    final_x_title <- xlab_text
+  } else {
+    final_x_title <- if(exists("lab") && x_var_name %in% lab$v) lab[lab$v == x_var_name, 2] else x_var_name
+  }
+  
+  # Logic for Legend TITLE
+  if (!is.null(leg_title)) {
+    by_lab <- leg_title
+  } else {
+    by_lab <- if(exists("lab") && by_var_name %in% lab$v) lab[lab$v == by_var_name, 2] else by_var_name
+  }
   
   # --- 5. Draw Plot ---
   plot(1, type = "n", 
@@ -345,13 +362,26 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   
   # Titles
   mtext("Dispersal rate", side = 2, line = ylab_dist, cex = title_cex)
-  mtext(x_lab, side = 1, line = xlab_dist, cex = title_cex)
+  mtext(final_x_title, side = 1, line = xlab_dist, cex = title_cex)
   
   # Axes
-  y_ticks <- pretty(logical_ylim)
+  y_ticks <- pretty(c(0, user_max))
+  if(!is.null(ylim)) y_ticks <- y_ticks[y_ticks <= ylim[2]]
   y_ticks <- y_ticks[y_ticks >= 0] 
+  
   axis(2, at = y_ticks, las = 1, cex.axis = axis_cex)
-  axis(1, at = 1:nlevels(x_dat), labels = levels_x, cex.axis = axis_cex)
+  
+  # Logic for X-Axis TICKS
+  final_tick_labels <- if(!is.null(x_tick_labs)) x_tick_labs else levels_x
+  
+  if(length(final_tick_labels) != nlevels(x_dat)) {
+    warning(paste("Length of x_tick_labs (", length(final_tick_labels), 
+                  ") does not match levels of X variable (", nlevels(x_dat), 
+                  "). Using default levels."))
+    final_tick_labels <- levels_x
+  }
+  
+  axis(1, at = 1:nlevels(x_dat), labels = final_tick_labels, cex.axis = axis_cex)
   
   # --- 6. Plot Points ---
   for (i in seq_along(levels_by)) {
@@ -386,10 +416,10 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
               lines(c(x1, x1, x2, x2), c(base_y, base_y + step_h/3, base_y + step_h/3, base_y), lwd = 1.5)
               p_val <- curr_sigs$p.value[r]
               sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
-              
               text(mean(c(x1, x2)), base_y + step_h/2, labels = sym, cex = 1.2, pos = 3, offset = star_dist_top)
               
-              base_y <- base_y + step_h * 1.5
+              # Increment with spacing control
+              base_y <- base_y + (step_h * top_bracket_spacing)
             }
           }
         }
@@ -399,14 +429,13 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   
   # --- 8. Draw BOTTOM Brackets ---
   if (show_sig_bottom && !is.null(sig_data_bot) && nrow(sig_data_bot) > 0) {
-    start_y <- 0 
+    current_y <- 0 
     for (gi in seq_along(levels_by)) {
       curr_group <- levels_by[gi]
       curr_sigs <- sig_data_bot[as.character(sig_data_bot[[by_var_name]]) == as.character(curr_group), ]
       
       if (nrow(curr_sigs) > 0) {
-        lane_y <- start_y - (step_h * 0.5) - ((gi - 1) * (step_h * 1.8))
-        
+        current_y <- current_y - (step_h * 0.5)
         for (r in 1:nrow(curr_sigs)) {
           parts <- unlist(strsplit(as.character(curr_sigs$contrast[r]), "\\s+[-/]\\s+"))
           if (length(parts) >= 2) {
@@ -414,14 +443,13 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
             idx2 <- which(levels_x == trimws(parts[2]))
             if (length(idx1) > 0 && length(idx2) > 0) {
               x1 <- idx1 + offsets[gi]; x2 <- idx2 + offsets[gi]
-              
-              y_top <- lane_y
-              y_bottom <- lane_y - (step_h * 0.4)
+              y_top <- current_y
+              y_bottom <- current_y - (step_h * 0.4)
               lines(c(x1, x1, x2, x2), c(y_top, y_bottom, y_bottom, y_top), lwd = 1.5, col = cols[gi])
               p_val <- curr_sigs$p.value[r]
               sym <- ifelse(p_val < 0.001, "***", ifelse(p_val < 0.01, "**", "*"))
-              
               text(mean(c(x1, x2)), y_bottom, labels = sym, cex = 1.2, col = cols[gi], pos = 1, offset = star_dist_bot) 
+              current_y <- y_bottom - (step_h * 1.2) 
             }
           }
         }
@@ -431,7 +459,8 @@ plot_2_way <- function(model, formula, col_vec = c("#1B9E77", "#D95F02", "#7570B
   
   # --- 9. Legend ---
   if (add_legend) {
-    legend(legend_pos, legend = levels_by, col = cols, pt.bg = "white", pch = pchs, lwd = 2, title = by_lab, bty = "n", cex = leg_cex)
+    leg_ncol <- if (n_groups > 3) 2 else 1
+    legend(legend_pos, legend = levels_by, col = cols, pt.bg = "white", pch = pchs, lwd = 2, title = by_lab, bty = "n", cex = leg_cex, ncol = leg_ncol, text.width = max(strwidth(levels_by, cex = leg_cex)) * 1.5)
   }
 }
 
@@ -450,15 +479,15 @@ cairo_pdf("Figures/Fig_1.pdf", width = wi, height = hi, symbolfamily = "OpenSymb
 op <- par(mfrow = c(1, 3), mar = c(5.5, 6, 3, 2))
 
 # Panel A
-plot_2_way(m, '~ env | cue', legend_buffer = 0.6, bottom_buffer = 0.3)
+plot_2_way(m, '~ env | cue', legend_buffer = 0.6, bottom_buffer = 0.3, leg_title = "Kairomone", xlab_text = "Current environment")
 mtext("(a)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 
 # Panel B
-plot_2_way(m, '~ host_spec | cue', legend_buffer = 0.3, bottom_buffer = 0.25)
+plot_2_way(m, '~ host_spec | cue', legend_buffer = 0.3, bottom_buffer = 0.25, leg_title = "Kairomone", xlab_text = "Host specialisation")
 mtext("(b)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 
 # Panel C
-plot_2_way(m, '~ env | host_spec', legend_buffer = 0.1, bottom_buffer = 0.2)
+plot_2_way(m, '~ env | host_spec', legend_buffer = 0.1, bottom_buffer = 0.2, leg_title = "Host specialisation", xlab_text = "Current environment")
 mtext("(c)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 
 par(op)
@@ -618,3 +647,50 @@ mtext("(b)", side = 3, line = 1, adj = -0.1, cex = 1.2)
 par(op)
 
 dev.off()
+
+
+# Figure S4 ---------------------------------------------------------------
+
+# Data ----
+load("data/data.RData")
+data <- subset(data, n_kairo < 2)
+data <- transform(data, W = NULL, B = NULL, O = NULL, S = NULL)
+data <- droplevels(data)
+summary(data)
+
+# Model ----
+m <- glmmTMB(D/N ~ host_spec * plant * kairo + (1|line), weights = N, data, family = betabinomial)
+summary(m)
+car::Anova(m)
+
+
+# Figure ----
+
+mult <- 1.5
+
+# Dimensions in millimetres:
+w <- 173; h <- 80
+
+# Dimensions in inches * multiplier:
+wi <- round(mult * w / 25.4, 1)
+hi <- round(mult * h / 25.4, 1)
+
+cairo_pdf("Figures/Fig_S4.pdf", width = wi, height = hi, symbolfamily = "OpenSymbol")
+op <- par(mfrow = c(1, 3), mar = c(5.5, 6, 3, 2))
+
+# Panel A
+plot_2_way(m, '~ plant | kairo', legend_buffer = 0.4, leg_title = "Kairomone", xlab_text = "Current environment")
+mtext("(a)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
+# Panel B
+plot_2_way(m, '~ host_spec | kairo', leg_title = "Kairomone", xlab_text = "Host specialisation", bottom_buffer = 0.4, top_bracket_spacing = 2.3, legend_buffer = 0.5)
+mtext("(b)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
+# Panel C
+plot_2_way(m, '~ host_spec | plant', leg_title = "Current environment", xlab_text = "Host specialisation", bottom_buffer = 0.3, legend_buffer = 0.1)
+mtext("(c)", side = 3, line = 1, adj = -0.1, cex = 1.2)
+
+par(op)
+
+dev.off()
+
