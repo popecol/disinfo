@@ -54,21 +54,21 @@ table(data$plant, data$kairo)
 
 # Beta-binomial GLMM ------------------------------------------------------
 
-m <- glmmTMB(D/N ~ host_spec * plant * kairo + (1|line), weights = N, data, family = betabinomial)
-summary(m)
-car::Anova(m)
-sr <- simulateResiduals(m); plot(sr)
+m2 <- glmmTMB(D/N ~ host_spec * plant * kairo + (1|line), weights = N, data, family = betabinomial)
+summary(m2)
+car::Anova(m2)
+sr <- simulateResiduals(m2); plot(sr)
 
 # Marginal effects
-p1 <- em(m, ~ kairo, 16) + xlab("Kairomone")
-p2 <- em(m, ~ plant, 16) + xlab("Current environment")
-p3 <- em(m, ~ host_spec, 16) + xlab("Specialisation")
+p1 <- em(m2, ~ kairo, 16) + xlab("Kairomone")
+p2 <- em(m2, ~ plant, 16) + xlab("Current environment")
+p3 <- em(m2, ~ host_spec, 16) + xlab("Specialisation")
 cowplot::plot_grid(p1, p2, p3, ncol = 3, labels = "AUTO")
 
 # 2-way interactions
-em(m, ~ plant | kairo) + xlab("Current environment")
-em(m, ~ host_spec | kairo) + xlab("Specialisation")
-em(m, ~ host_spec | plant) + xlab("Specialisation")
+em(m2, ~ plant | kairo) + xlab("Current environment")
+em(m2, ~ host_spec | kairo) + xlab("Specialisation")
+em(m2, ~ host_spec | plant) + xlab("Specialisation")
 
 # 3-way interaction ----
-em(m, ~ host_spec | plant | kairo) + xlab("Specialisation")
+em(m2, ~ host_spec | plant | kairo) + xlab("Specialisation")
