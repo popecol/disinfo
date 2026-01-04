@@ -19,11 +19,21 @@ library(DHARMa)
 library(emmeans)
 
 em <- function(obj, formula, size = 18, ...) {
-  # Emmeans Ploting Helper.
   
+  # Emmeans Plotting Helper.
   require(ggplot2)
+  
   f <- update(formula, pairwise ~ .)
-  print(emmeans(obj, f, type = "response")$contrasts)
+  
+  # 1. Calculate Contrasts (Odds Ratios)
+  # type = "response": back-transforms to Odds Ratios
+  contr <- emmeans(obj, f, type = "response")$contrasts
+  
+  # 2. Print Summary with BOTH Intervals and P-values
+  # infer = c(TRUE, TRUE): Requests both Confidence Intervals and Hypothesis Tests
+  print(summary(contr, infer = c(TRUE, TRUE)))
+  
+  # 3. Generate Plot
   p <- emmip(obj, formula, CIs = TRUE, type = "response", ylab = "Dispersal rate", ...)
   p + theme(text = element_text(size = size))
 }
@@ -55,29 +65,29 @@ summary(data)
 
 # Beta-binomial GLMM ------------------------------------------------------
 
-m <- glmmTMB(D/N ~ cue * env * host_spec + (1|line), weights = N, data, family = betabinomial)
-summary(m)
-sr <- simulateResiduals(m); plot(sr)
-car::Anova(m)
+m1 <- glmmTMB(D/N ~ cue * env * host_spec + (1|line), weights = N, data, family = betabinomial)
+summary(m1)
+sr <- simulateResiduals(m1); plot(sr)
+car::Anova(m1)
 
 # Marginal effects ----
-p1 <- em(m, ~ cue, 16)
-p2 <- em(m, ~ env, 16)
-p3 <- em(m, ~ host_spec, 16)
+p1 <- em(m1, ~ cue, 16)
+p2 <- em(m1, ~ env, 16)
+p3 <- em(m1, ~ host_spec, 16)
 cowplot::plot_grid(p1, p2, p3, ncol = 3, labels = "AUTO")
 
 
 # 2-way interactions ----
-em(m, ~ env | cue)
-# em(m, ~ cue | env)
+em(m1, ~ env | cue)
+# em(m1, ~ cue | env)
 
-em(m, ~ host_spec | cue)
-# em(m, ~ cue | host_spec)
+em(m1, ~ host_spec | cue)
+# em(m1, ~ cue | host_spec)
 
-em(m, ~ env | host_spec)
-# em(m, ~ host_spec | env)
+em(m1, ~ env | host_spec)
+# em(m1, ~ host_spec | env)
 
 
 # 3-way interaction ----
-em(m, ~ env | cue | host_spec)
-# em(m, ~ cue | env | host_spec)
+em(m1, ~ env | cue | host_spec)
+# em(m1, ~ cue | env | host_spec)
