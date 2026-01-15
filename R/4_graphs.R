@@ -509,7 +509,7 @@ colt <- adjustcolor(pal, alpha = 0.1)
 load("data/data.RData")
 data <- subset(data, n_kairo > 0)  # Zero is equivalent to control in the variable ‘cue’.
 data <- subset(data, plant == "W") # No mixes for env==‘unknown’.
-data <- transform(data, group = interaction(cue, host_spec, sep = "_"), q = D / N, SN = n_familiar / n_kairo, regime = NULL, plant = NULL, env = NULL)
+data <- transform(data, group = interaction(cue, host_spec, sep = "_"), q = D / N, SN = log((n_familiar + 1) / (n_kairo - n_familiar + 1), base = 2), regime = NULL, plant = NULL, env = NULL)
 data <- droplevels(data)
 summary(data)
 
@@ -551,7 +551,8 @@ nd_a <- cbind(nd_a, p_a)
 
 # (b) Signal-to-noise ratio (Model msn)
 host_spec_levels <- levels(data$host_spec)
-SN_seq <- seq(0, 1, length.out = 100)
+# SN_seq <- seq(0, 1, length.out = 100)
+SN_seq <- seq(-2, 1, length.out = 100)
 
 
 # Create prediction grid for (b)
@@ -626,7 +627,10 @@ plot(fit ~ SN, nd_b, type = "n",
      xlab = "Signal-to-Noise Ratio", 
      ylab = "", 
      cex.axis = 0.8,
-     cex.lab = cex.lab)
+     cex.lab = cex.lab,
+     xaxt = "n")
+
+axis(1, at = -2:1)
 
 for (i in seq_along(host_spec_levels)) {
   h <- host_spec_levels[i]

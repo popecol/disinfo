@@ -21,7 +21,8 @@ library(ggplot2)
 load("data/data.RData")
 data <- subset(data, n_kairo > 0)  # Zero is equivalent to control in the variable ‘cue’.
 data <- subset(data, plant == "W") # No mixes for env==‘unknown’.
-data <- transform(data, group = interaction(cue, host_spec, sep = "_"), q = D / N, SN = n_familiar / n_kairo, regime = NULL, plant = NULL, env = NULL)
+data <- transform(data, group = interaction(cue, host_spec, sep = "_"), q = D / N, SN = log((n_familiar + 1) / (n_kairo - n_familiar + 1), base = 2), regime = NULL, plant = NULL, env = NULL)
+
 data <- droplevels(data)
 summary(data)
 
@@ -42,7 +43,7 @@ summary(data)
 # n_familiar: The number of familiar kairomones delivered.
 #      group: Combination of 'cue' and 'host_spec'.
 #          q: Dispersal rate (q=D/N)
-#         SN: Signal-to-noise ratio (SN=n_familiar/n_kairo)
+#         SN: Signal-to-noise ratio
 
 summary(data$kairo)
 table(data$cue, data$n_kairo)
