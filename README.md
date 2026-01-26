@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.16910510.svg)](https://doi.org/10.5281/zenodo.16910510)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18380879.svg)](https://doi.org/10.5281/zenodo.18380879)
 
 This repository contains code in R and data supporting the publication:
 
