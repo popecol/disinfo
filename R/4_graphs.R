@@ -1,7 +1,7 @@
 
 # Code for the paper:
 # Zalewska K., Skoracka A., Bonte D., Puchalska E., Lewandowski M., Kuczynski L.
-# Is passive dispersal informed? - Experimental evidence for decision-making in phytophagous arthropods
+# Niche breadth and olfactory context shape informed passive dispersal
 
 # Charts from the paper using traditional R graphics.
 
