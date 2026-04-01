@@ -1,7 +1,8 @@
 
 # Code for the paper:
-# Zalewska K., Skoracka A., Bonte D., Puchalska E., Lewandowski M., Kuczynski L.
-# Niche breadth and olfactory context shape informed passive dispersal
+# Zalewska, K., A.Skoracka, D.Bonte, E.Puchalska, M.Lewandowski, and L.Kuczyński. 2026. 
+# “Niche Breadth and Olfactory Context Shape Informed Passive Dispersal.” 
+# Ecology Letters 29, no. 4: e70373. https://doi.org/10.1111/ele.70373.
 
 # Experiment 2
 # Dispersal in response to the signal noise through a mixture of kairomones from the target environment 
